@@ -7,8 +7,8 @@ class DBAccess {
     private $dbQuery;
     private $dbResult;
 
-    function __construct($db='pgsql') {
-        $database = parse_ini_file("../required/config.ini", true)['database'];
+    function __construct($db='pgsql', $database) {
+        // $database = parse_ini_file("../required/config.ini", true)['database'];
         $this -> dbEngine = $db;
         $this -> dbConn = $this -> db_connect($database);
     }
@@ -18,9 +18,8 @@ class DBAccess {
             case 'psql':
                 return pg_connect( $database );
             case 'mysql':
-                // return mysql_connect( $database );
-                return mysqli_connect( $database );
-                // return new mysqli( $database );
+                list($server, $username, $password, $db) = $database;
+                return mysqli_connect( $server, $username, $password, $db );
         }
     }
 
@@ -65,7 +64,7 @@ class DBAccess {
             case 'psql':
                 return pg_affected_rows( $this -> dbResult );
             case 'mysql':
-                return mysqli_affected_rows( $this -> dbResult );
+                return mysqli_affected_rows( $this -> dbConn );
         }
     }
 
@@ -74,7 +73,7 @@ class DBAccess {
             case 'psql':
                 return pg_fetch_all( $this -> dbResult );
             case 'mysql':
-                return mysqli_fetch_all( $this -> dbResult );
+                return mysqli_fetch_all( $this -> dbResult, MYSQLI_ASSOC );
         }
     }
 
@@ -87,6 +86,14 @@ class DBAccess {
         }
     }
 
+    /**
+     * @param  string
+     * @param  array
+     * @param  array
+     * @param  array
+     * @param  string
+     * @return array
+     */
     public function db_select ( $table='', $keys=array(), $return_params=array(), $opts=array(), $return_key='' ) {
         # Empty table return false
         if( empty($table) ) return False;
@@ -102,13 +109,15 @@ class DBAccess {
 
                 $null = ( array_key_exists('use_null', $def) && $def['use_null'] === True && ( empty($def['value']) || $def['value'] == 'NULL' ) ) ? TRUE : FALSE;
 
-                if ( !array_key_exists('operator', $def) ) {
-                    $this -> dbQuery =  ($null) ? ' IS' : ' =';
+                if ( !array_key_exists('operator', $def) && strpos( $def['value'], '%' ) !== False ) {
+                    $this -> dbQuery .=  ' LIKE';                
+                } else if ( !array_key_exists('operator', $def) ) {
+                    $this -> dbQuery .=  ($null) ? ' IS' : ' =';
                 } else {
-                    $this -> dbQuery =  ' ' . $def['operator'];
+                    $this -> dbQuery .=  ' ' . $def['operator'];
                 }
 
-                $this -> dbQuery .=  $this -> db_escape_string( $def['value'] ) . ' ';
+                $this -> dbQuery .= ( is_string( $def['value'] ) ) ? ' \'' . $this -> db_escape_string( $def['value'] ) . '\' ' : ' ' . $this -> db_escape_string( $def['value'] );
             }
         } // END $key process
 
@@ -117,27 +126,37 @@ class DBAccess {
             $this -> dbQuery .= ( array_key_exists('group_by', $opts) && is_array($opts['group_by']) ) ? ' GROUP BY ' . implode(', ', $opts['group_by']) : '';
             $this -> dbQuery .= ( array_key_exists('order_by', $opts) && is_array($opts['order_by']) ) ? ' ORDER BY ' . implode(', ', $opts['order_by']) : '';
             $this -> dbQuery .= ( array_key_exists('limit', $opts) )  ? ' LIMIT ' . (string) $opts['limit']  : '';
-            $this -> dbQuery .= ( array_key_exists('offset', $opts) ) ? ' OFSET ' . (string) $opts['offset'] : '';
+            $this -> dbQuery .= ( array_key_exists('offset', $opts) ) ? ' OFFSET ' . (string) $opts['offset'] : '';
         }
 
+        print_r($this->dbQuery); echo "<br>";
         $this -> dbResult = $this -> db_execute();
 
-        if ( !$this -> dbResult ) {
-            return False;
-        } else if ( $this -> db_affected_rows() <= 0 ) {
-            return 0
-        } else {
-            $rows = db_fetch_all();
-            if( !empty( $return_key ) ){
-                $rows = array();
-                foreach ( db_fetch_all() as $key => $val ) {
-                    $rows[ $val[ $return_key ] ] = $val;
-                }
+        if ( !$this -> dbResult ) { return False; } 
+        if ( $this -> db_affected_rows() <= 0 ) { return 0; } 
+
+        $rows = $this -> db_fetch_all();
+        if( !empty( $return_key ) ){
+            $rrows = array();
+            foreach ( $rows as $key => $val ) {
+                $rrows[ $val[ $return_key ] ] = $val;
             }
-            return $rows;
+            $rows = $rrows;
         }
+        return $rows;
 
     } // END db_select
+
+    /**
+     * [Insert params into requested table]
+     * @param  string $table         [table in wich params going to be insert]
+     * @param  array  $params        [array in wich key is going to be the name of the column, value going to be the value]
+     * @param  array  $return_params [columns wich the query is going to return]
+     * @return array                 [array]
+     */
+    public function db_insert( $table='', $params=array(), $return_params=array() ) {
+        return array();
+    }
 
 }
 
