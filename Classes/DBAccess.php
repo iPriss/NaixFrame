@@ -86,6 +86,29 @@ class DBAccess {
         }
     }
 
+    private function add_quotes( $string ) {
+        return '\'' . $string . '\'';
+    }
+
+    private function prepare_where_statment ($keys) {
+        foreach ($keys as $key => $def) {
+            $this -> dbQuery .= ( strpos( $this -> dbQuery, 'WHERE' ) === False ) ? ' WHERE ' : ' AND ';
+            $this -> dbQuery .= $key;
+
+            $null = ( array_key_exists('use_null', $def) && $def['use_null'] === True && ( empty($def['value']) || $def['value'] == 'NULL' ) ) ? TRUE : FALSE;
+
+            if ( !array_key_exists('operator', $def) && strpos( $def['value'], '%' ) !== False ) {
+                $this -> dbQuery .=  ' LIKE';                
+            } else if ( !array_key_exists('operator', $def) ) {
+                $this -> dbQuery .=  ($null) ? ' IS' : ' =';
+            } else {
+                $this -> dbQuery .=  ' ' . $def['operator'];
+            }
+
+            $this -> dbQuery .= ( is_string( $def['value'] ) ) ? ' \'' . $this -> db_escape_string( $def['value'] ) . '\' ' : ' ' . $this -> db_escape_string( $def['value'] );
+        }
+    }
+
     /**
      * @param  string
      * @param  array
@@ -97,29 +120,13 @@ class DBAccess {
     public function db_select ( $table='', $keys=array(), $return_params=array(), $opts=array(), $return_key='' ) {
         # Empty table return false
         if( empty($table) ) return False;
+        $this -> dbQuery = Null;
 
         $return_params = ( count( $return_params ) > 0 ) ? implode(', ', $return_params) : '*';
 
         $this -> dbQuery = 'SELECT ' . $return_params . ' FROM ' . $table;
 
-        if ( count($keys) > 0 ){
-            foreach ($keys as $key => $def) {
-                $this -> dbQuery .= ( strpos( $this -> dbQuery, 'WHERE' ) === False ) ? ' WHERE ' : ' AND ';
-                $this -> dbQuery .= $key;
-
-                $null = ( array_key_exists('use_null', $def) && $def['use_null'] === True && ( empty($def['value']) || $def['value'] == 'NULL' ) ) ? TRUE : FALSE;
-
-                if ( !array_key_exists('operator', $def) && strpos( $def['value'], '%' ) !== False ) {
-                    $this -> dbQuery .=  ' LIKE';                
-                } else if ( !array_key_exists('operator', $def) ) {
-                    $this -> dbQuery .=  ($null) ? ' IS' : ' =';
-                } else {
-                    $this -> dbQuery .=  ' ' . $def['operator'];
-                }
-
-                $this -> dbQuery .= ( is_string( $def['value'] ) ) ? ' \'' . $this -> db_escape_string( $def['value'] ) . '\' ' : ' ' . $this -> db_escape_string( $def['value'] );
-            }
-        } // END $key process
+        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); } 
 
         // Adding opts
         if ( count( $opts ) > 0 ) {
@@ -129,7 +136,6 @@ class DBAccess {
             $this -> dbQuery .= ( array_key_exists('offset', $opts) ) ? ' OFFSET ' . (string) $opts['offset'] : '';
         }
 
-        print_r($this->dbQuery); echo "<br>";
         $this -> dbResult = $this -> db_execute();
 
         if ( !$this -> dbResult ) { return False; } 
@@ -144,7 +150,6 @@ class DBAccess {
             $rows = $rrows;
         }
         return $rows;
-
     } // END db_select
 
     /**
@@ -155,8 +160,43 @@ class DBAccess {
      * @return array                 [array]
      */
     public function db_insert( $table='', $params=array(), $return_params=array() ) {
-        return array();
-    }
+        # Empty table return false
+        if( empty($table) || count($params) <= 0 ) return False;
+        $this -> dbQuery = Null;
+
+        $values  = implode( ', ', array_map( array($this, "add_quotes"), array_map( array($this, 'db_escape_string'), array_values($params) ) ) );
+        $columns = implode( ', ', array_keys($params) );
+
+        $this -> dbQuery = "INSERT INTO $table ($columns) VALUES ($values) ";
+
+        if( $this -> dbEngine == 'psql' ) {
+            $this -> dbQuery .= ( count( $return_params ) > 0 ) ? implode(', ', $return_params) : '';
+        }
+
+        $this -> dbResult = $this -> db_execute();
+
+        if( $this -> dbEngine == 'psql' ) {
+            if ( !$this -> dbResult ) { return False; } 
+            if ( $this -> db_affected_rows() <= 0 ) { return 0; } 
+
+            $rows = $this -> db_fetch_all();
+            if( !empty( $return_key ) ){
+                $rrows = array();
+                foreach ( $rows as $key => $val ) {
+                    $rrows[ $val[ $return_key ] ] = $val;
+                }
+                $rows = $rrows;
+            }
+            return $rows;
+        }else if( $this -> dbEngine == 'psql' ) {
+            if( count( $return_params ) > 0 ) {
+
+            }else{
+                return $this -> db_affected_rows();
+            }
+        }
+
+    } // END db_insert 
 
 }
 
