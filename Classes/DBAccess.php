@@ -7,6 +7,8 @@ class DBAccess {
     private $dbQuery;
     private $dbResult;
 
+    public $dbError;
+
     function __construct($db='pgsql', $database) {
         // $database = parse_ini_file("../required/config.ini", true)['database'];
         $this -> dbEngine = $db;
@@ -53,9 +55,13 @@ class DBAccess {
     private function db_execute () {
         switch ($this -> dbEngine) {
             case 'psql':
-                return pg_query( $this->dbConn, $this->dbQuery );
+                $result = @pg_query( $this->dbConn, $this->dbQuery );
+                $this -> dbError = pg_last_error( $this->dbConn );
+                return $result;
             case 'mysql':
-                return mysqli_query( $this->dbConn, $this->dbQuery );
+                $result = @mysqli_query( $this->dbConn, $this->dbQuery );
+                $this -> dbError = mysqli_error( $this->dbConn );
+                return $result;
         }
     }
 
@@ -87,7 +93,11 @@ class DBAccess {
     }
 
     private function add_quotes( $string ) {
-        return '\'' . $string . '\'';
+        if ( !is_numeric($string) ) {
+            return '\'' . $string . '\'';
+        }else{
+            return $string;
+        }
     }
 
     private function prepare_where_statment ($keys) {
@@ -98,7 +108,7 @@ class DBAccess {
             $null = ( array_key_exists('use_null', $def) && $def['use_null'] === True && ( empty($def['value']) || $def['value'] == 'NULL' ) ) ? TRUE : FALSE;
 
             if ( !array_key_exists('operator', $def) && strpos( $def['value'], '%' ) !== False ) {
-                $this -> dbQuery .=  ' LIKE';                
+                $this -> dbQuery .=  ' LIKE';
             } else if ( !array_key_exists('operator', $def) ) {
                 $this -> dbQuery .=  ($null) ? ' IS' : ' =';
             } else {
@@ -109,24 +119,34 @@ class DBAccess {
         }
     }
 
+    private function add_key_to_rows ($return_key, $rows) {
+        $rrows = array();
+        foreach ( $rows as $key => $val ) {
+            $rrows[ $val[ $return_key ] ] = $val;
+        }
+        return $rrows;
+    }
+
     /**
-     * @param  string
-     * @param  array
-     * @param  array
-     * @param  array
-     * @param  string
-     * @return array
+     * [db_select description]
+     * @param  string $table         [table in wich params going to be insert]
+     * @param  array  $keys          [array with columns used in were clause, key is the column name, and had an array inside with a value]
+     * @param  array  $return_params [array with each column returned]
+     * @param  array  $opts          [array with QUERY options as group_by, order_by, limit, offset]
+     * @param  string $return_key    [name of the column witch is gonna be used as return array key]
+     * @return array                 [array with the result]
      */
     public function db_select ( $table='', $keys=array(), $return_params=array(), $opts=array(), $return_key='' ) {
         # Empty table return false
         if( empty($table) ) return False;
         $this -> dbQuery = Null;
+        $this -> dbError = Null;
 
         $return_params = ( count( $return_params ) > 0 ) ? implode(', ', $return_params) : '*';
 
         $this -> dbQuery = 'SELECT ' . $return_params . ' FROM ' . $table;
 
-        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); } 
+        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
 
         // Adding opts
         if ( count( $opts ) > 0 ) {
@@ -136,20 +156,13 @@ class DBAccess {
             $this -> dbQuery .= ( array_key_exists('offset', $opts) ) ? ' OFFSET ' . (string) $opts['offset'] : '';
         }
 
+        print_r($this->dbQuery); echo "<br>";
         $this -> dbResult = $this -> db_execute();
 
-        if ( !$this -> dbResult ) { return False; } 
-        if ( $this -> db_affected_rows() <= 0 ) { return 0; } 
+        if ( !$this -> dbResult ) { return False; }
+        if ( $this -> db_affected_rows() <= 0 ) { return 0; }
 
-        $rows = $this -> db_fetch_all();
-        if( !empty( $return_key ) ){
-            $rrows = array();
-            foreach ( $rows as $key => $val ) {
-                $rrows[ $val[ $return_key ] ] = $val;
-            }
-            $rows = $rrows;
-        }
-        return $rows;
+        return ( !empty( $return_key ) ) ? $this->add_key_to_rows( $return_key, $this -> db_fetch_all() ) : $this -> db_fetch_all();
     } // END db_select
 
     /**
@@ -157,12 +170,13 @@ class DBAccess {
      * @param  string $table         [table in wich params going to be insert]
      * @param  array  $params        [array in wich key is going to be the name of the column, value going to be the value]
      * @param  array  $return_params [columns wich the query is going to return]
-     * @return array                 [array]
+     * @return array                 [array with the result]
      */
-    public function db_insert( $table='', $params=array(), $return_params=array() ) {
+    public function db_insert ( $table='', $params=array(), $return_params=array(), $return_key='' ) {
         # Empty table return false
         if( empty($table) || count($params) <= 0 ) return False;
         $this -> dbQuery = Null;
+        $this -> dbError = Null;
 
         $values  = implode( ', ', array_map( array($this, "add_quotes"), array_map( array($this, 'db_escape_string'), array_values($params) ) ) );
         $columns = implode( ', ', array_keys($params) );
@@ -170,33 +184,74 @@ class DBAccess {
         $this -> dbQuery = "INSERT INTO $table ($columns) VALUES ($values) ";
 
         if( $this -> dbEngine == 'psql' ) {
-            $this -> dbQuery .= ( count( $return_params ) > 0 ) ? implode(', ', $return_params) : '';
+            $this -> dbQuery .= ( count( $return_params ) > 0 ) ? 'RETURNING ' .  implode(', ', $return_params) : '';
         }
 
         $this -> dbResult = $this -> db_execute();
 
+        if ( !$this -> dbResult ) { return False; }
+        if ( $this -> db_affected_rows() <= 0 ) { return 0; }
+
         if( $this -> dbEngine == 'psql' ) {
-            if ( !$this -> dbResult ) { return False; } 
-            if ( $this -> db_affected_rows() <= 0 ) { return 0; } 
-
-            $rows = $this -> db_fetch_all();
-            if( !empty( $return_key ) ){
-                $rrows = array();
-                foreach ( $rows as $key => $val ) {
-                    $rrows[ $val[ $return_key ] ] = $val;
-                }
-                $rows = $rrows;
+            if ( count( $return_params ) > 0 ) {
+                return ( !empty( $return_key ) ) ? $this->add_key_to_rows( $return_key, $this -> db_fetch_all() ) : $this -> db_fetch_all();
+            } else {
+                return $this -> db_affected_rows();
             }
-            return $rows;
-        }else if( $this -> dbEngine == 'psql' ) {
-            if( count( $return_params ) > 0 ) {
-
-            }else{
+        } else if ( $this -> dbEngine == 'mysql' ) {
+            if ( count( $return_params ) > 0 ) {
+                return mysqli_insert_id( $this->dbConn ); // Revisar
+            } else {
                 return $this -> db_affected_rows();
             }
         }
+    } // END db_insert
 
-    } // END db_insert 
+    /**
+     * [db_update description]
+     * @param  string $table  [table in wich params going to be insert]
+     * @param  array  $keys   [array with columns used in were clause, key is the column name, and had an array inside with a value]
+     * @param  array  $params [array with the params used to update]
+     * @return numeric        [affected rows]
+     */
+    public function db_update ( $table='', $keys=array(), $params=array() ) {
+        # Empty table return false
+        if( empty($table) || count($params) <= 0 ) return False;
+        $this -> dbQuery = Null;
+        $this -> dbError = Null;
+
+        $this -> dbQuery = "UPDATE $table SET";
+
+        foreach( $params as $key => $val ) {
+            $operator = ( $val == Null ) ? ' IS ' : ' = ';
+            $this -> dbQuery .= ' ' . $key . $operator . $this -> add_quotes ( $this -> db_escape_string( $val ) );
+        }
+
+        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
+
+        $this -> dbResult = $this -> db_execute();
+        return $this -> db_affected_rows();
+    } // END db_update
+
+    /**
+     * [db_delete description]
+     * @param  string $table [table in wich params going to be insert]
+     * @param  array  $keys  [array with columns used in were clause, key is the column name, and had an array inside with a value]
+     * @return numeric       [affected rows]
+     */
+    public function db_delete ( $table='', $keys=array() ) {
+        # Empty table return false
+        if( empty($table) ) return False;
+        $this -> dbQuery = Null;
+        $this -> dbError = Null;
+
+        $this -> dbQuery = "DELETE FROM $table";
+
+        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
+
+        $this -> dbResult = $this -> db_execute();
+        return $this -> db_affected_rows();
+    } // END db_delete
 
 }
 
