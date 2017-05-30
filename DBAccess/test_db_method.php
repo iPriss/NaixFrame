@@ -1,9 +1,9 @@
 <?php
 
-	
-    require('../Classes/DBAccess.php');
 
-    $config = parse_ini_file("../required/config.ini", true);
+    require('DBAccess.php');
+
+    $config = parse_ini_file("../require/config.ini", true);
 
     $testDB = new DBAccess($config['dbEngine'], $config['database']);
 
@@ -12,9 +12,9 @@
 
     // Test select
     $keys = array(
-    	'random' => array(
+    	'id' => array(
     			'value' => 199, // Required
-    			// 'operator' => '<', // Optional (SQL Operators LIKE, >, IS)
+    			'operator' => '<', // Optional (SQL Operators LIKE, >, IS)
     		)
     );
 
@@ -52,7 +52,7 @@
     print_r("--------------------------------------- UPDATE --------------------------------------- "); echo "<br>";
 
     // Test update
-    $keys = array( 'id' => array( 'value' => 262208 ) );
+    $keys = array( 'id' => array( 'value' => 145 ) );
     $params = array( 'random' => 199 );
 
     // db_update(table, keys, params)
@@ -68,7 +68,7 @@
     print_r("-------------------------------------------------------------------------------------------"); echo "<br>";
 
     // Test delete
-    $keys = array( 'random' => array( 'value' => 199 ) );
+    $keys = array( 'id' => array( 'value' => 143 ) );
 
     // db_update(table, keys, params)
     $deletedRow = $testDB -> db_delete( 'naixframe.test_select', $keys );

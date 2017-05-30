@@ -1,5 +1,10 @@
 <?php
 
+function exception_error_handler($errno, $errstr, $errfile, $errline ) {
+    throw new ErrorException($errstr, $errno, 0, $errfile, $errline);
+}
+set_error_handler("exception_error_handler");
+
 class DBAccess {
 
     private $dbEngine;
@@ -9,8 +14,7 @@ class DBAccess {
 
     public $dbError;
 
-    function __construct($db='pgsql', $database) {
-        // $database = parse_ini_file("../required/config.ini", true)['database'];
+    function __construct($db='psql', $database) {
         $this -> dbEngine = $db;
         $this -> dbConn = $this -> db_connect($database);
     }
@@ -18,10 +22,22 @@ class DBAccess {
     private function db_connect ($database) {
         switch ($this -> dbEngine) {
             case 'psql':
-                return pg_connect( $database );
+                $conn = False;
+                try { $conn = @pg_connect($database); }
+                Catch (Exception $e) { $this -> dbError = $e->getMessage(); }
+                restore_error_handler();
+                return $conn;
             case 'mysql':
+                $conn = False;
                 list($server, $username, $password, $db) = $database;
-                return mysqli_connect( $server, $username, $password, $db );
+                $conn = @mysqli_connect( $server, $username, $password, $db );
+
+                if ( mysqli_connect_errno() ) {
+                    $this -> dbError = mysqli_connect_errno();
+                    return False;
+                }else{
+                    return $conn;
+                }
         }
     }
 
@@ -68,9 +84,11 @@ class DBAccess {
     private function db_affected_rows () {
         switch ($this -> dbEngine) {
             case 'psql':
-                return pg_affected_rows( $this -> dbResult );
+                if ( $this -> dbResult ) { return pg_affected_rows( $this -> dbResult ); }
+                else { return 0; }
             case 'mysql':
-                return mysqli_affected_rows( $this -> dbConn );
+                if ( $this -> dbConn ) { return mysqli_affected_rows( $this -> dbConn ); }
+                else { return 0; }
         }
     }
 
@@ -137,6 +155,8 @@ class DBAccess {
      * @return array                 [array with the result]
      */
     public function db_select ( $table='', $keys=array(), $return_params=array(), $opts=array(), $return_key='' ) {
+        if ( $this -> dbConn === False ){ return False; }
+
         # Empty table return false
         if( empty($table) ) return False;
         $this -> dbQuery = Null;
@@ -172,6 +192,8 @@ class DBAccess {
      * @return array                 [array with the result]
      */
     public function db_insert ( $table='', $params=array(), $return_params=array(), $return_key='' ) {
+        if ( $this -> dbConn === False ){ return False; }
+
         # Empty table return false
         if( empty($table) || count($params) <= 0 ) return False;
         $this -> dbQuery = Null;
@@ -214,6 +236,8 @@ class DBAccess {
      * @return numeric        [affected rows]
      */
     public function db_update ( $table='', $keys=array(), $params=array() ) {
+        if ( $this -> dbConn === False ){ return False; }
+
         # Empty table return false
         if( empty($table) || count($params) <= 0 ) return False;
         $this -> dbQuery = Null;
@@ -229,6 +253,8 @@ class DBAccess {
         if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
 
         $this -> dbResult = $this -> db_execute();
+
+        if ( !$this -> dbResult ) { return False; }
         return $this -> db_affected_rows();
     } // END db_update
 
@@ -239,6 +265,8 @@ class DBAccess {
      * @return numeric       [affected rows]
      */
     public function db_delete ( $table='', $keys=array() ) {
+        if ( $this -> dbConn === False ){ return False; }
+
         # Empty table return false
         if( empty($table) ) return False;
         $this -> dbQuery = Null;
@@ -249,6 +277,8 @@ class DBAccess {
         if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
 
         $this -> dbResult = $this -> db_execute();
+
+        if ( !$this -> dbResult ) { return False; }
         return $this -> db_affected_rows();
     } // END db_delete
 
