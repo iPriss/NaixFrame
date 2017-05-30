@@ -3,7 +3,6 @@
 function exception_error_handler($errno, $errstr, $errfile, $errline ) {
     throw new ErrorException($errstr, $errno, 0, $errfile, $errline);
 }
-set_error_handler("exception_error_handler");
 
 class DBAccess {
 
@@ -22,6 +21,7 @@ class DBAccess {
     private function db_connect ($database) {
         switch ($this -> dbEngine) {
             case 'psql':
+                set_error_handler("exception_error_handler");
                 $conn = False;
                 try { $conn = @pg_connect($database); }
                 Catch (Exception $e) { $this -> dbError = $e->getMessage(); }
@@ -33,7 +33,7 @@ class DBAccess {
                 $conn = @mysqli_connect( $server, $username, $password, $db );
 
                 if ( mysqli_connect_errno() ) {
-                    $this -> dbError = mysqli_connect_errno();
+                    $this -> dbError = "MySQL Error: " . mysqli_connect_errno();
                     return False;
                 }else{
                     return $conn;
@@ -106,7 +106,7 @@ class DBAccess {
             case 'psql':
                 return pg_escape_string($string);
             case 'mysql':
-                return mysql_real_escape_string($string);
+                return mysqli_real_escape_string($this -> dbConn, $string);
         }
     }
 
