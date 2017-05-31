@@ -15,6 +15,7 @@
     	'id' => array(
     			'value' => 199, // Required
     			'operator' => '<', // Optional (SQL Operators LIKE, >, IS)
+                // 'use_null' => True
     		)
     );
 

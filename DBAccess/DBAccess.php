@@ -125,16 +125,26 @@ class DBAccess {
 
             $null = ( array_key_exists('use_null', $def) && $def['use_null'] === True && ( empty($def['value']) || $def['value'] == 'NULL' ) ) ? TRUE : FALSE;
 
-            if ( !array_key_exists('operator', $def) && strpos( $def['value'], '%' ) !== False ) {
-                $this -> dbQuery .=  ' LIKE';
-            } else if ( !array_key_exists('operator', $def) ) {
-                $this -> dbQuery .=  ($null) ? ' IS' : ' =';
+            if ( !$null && empty($def['value']) ){
+                $this->dbError = "NULL value for \"$key\" in WHERE CLAUSE (If you whant use NULL value you must set use_null True)";
+                return False;
+            } else if ( $null && empty($def['value']) ) {
+                $def['value'] = 'NULL';
             } else {
-                $this -> dbQuery .=  ' ' . $def['operator'];
+                $def['value'] = $this -> db_escape_string( $def['value'] );
             }
 
-            $this -> dbQuery .= ( is_string( $def['value'] ) ) ? ' \'' . $this -> db_escape_string( $def['value'] ) . '\' ' : ' ' . $this -> db_escape_string( $def['value'] );
+            if ( !array_key_exists('operator', $def) && strpos( $def['value'], '%' ) !== False ) {
+                $this -> dbQuery .=  ' LIKE ';
+            } else if ( !array_key_exists('operator', $def) ) {
+                $this -> dbQuery .=  ($null) ? ' IS ' : ' = ';
+            } else {
+                $this -> dbQuery .=  ' ' . $def['operator'] . ' ';
+            }
+
+            $this -> dbQuery .= ( !is_numeric( $def['value'] ) && $def['value'] != 'NULL' ) ? '\'' . $def['value'] . '\'' : $def['value'];
         }
+        return True;
     }
 
     private function add_key_to_rows ($return_key, $rows) {
@@ -166,7 +176,7 @@ class DBAccess {
 
         $this -> dbQuery = 'SELECT ' . $return_params . ' FROM ' . $table;
 
-        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
+        if ( count($keys) > 0 && !$this -> prepare_where_statment($keys) ){ return False; }
 
         // Adding opts
         if ( count( $opts ) > 0 ) {
@@ -175,7 +185,7 @@ class DBAccess {
             $this -> dbQuery .= ( array_key_exists('limit', $opts) )  ? ' LIMIT ' . (string) $opts['limit']  : '';
             $this -> dbQuery .= ( array_key_exists('offset', $opts) ) ? ' OFFSET ' . (string) $opts['offset'] : '';
         }
-
+        print_r($this->dbQuery); echo "<br>";
         $this -> dbResult = $this -> db_execute();
 
         if ( !$this -> dbResult ) { return False; }
@@ -250,7 +260,7 @@ class DBAccess {
             $this -> dbQuery .= ' ' . $key . $operator . $this -> add_quotes ( $this -> db_escape_string( $val ) );
         }
 
-        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
+        if ( count($keys) > 0 && !$this -> prepare_where_statment($keys) ){ return False; }
 
         $this -> dbResult = $this -> db_execute();
 
@@ -274,7 +284,7 @@ class DBAccess {
 
         $this -> dbQuery = "DELETE FROM $table";
 
-        if ( count($keys) > 0 ){ $this -> prepare_where_statment($keys); }
+        if ( count($keys) > 0 && !$this -> prepare_where_statment($keys) ){ return False; }
 
         $this -> dbResult = $this -> db_execute();
 
