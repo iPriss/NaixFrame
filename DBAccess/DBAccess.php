@@ -185,7 +185,7 @@ class DBAccess {
             $this -> dbQuery .= ( array_key_exists('limit', $opts) )  ? ' LIMIT ' . (string) $opts['limit']  : '';
             $this -> dbQuery .= ( array_key_exists('offset', $opts) ) ? ' OFFSET ' . (string) $opts['offset'] : '';
         }
-        print_r($this->dbQuery); echo "<br>";
+
         $this -> dbResult = $this -> db_execute();
 
         if ( !$this -> dbResult ) { return False; }
