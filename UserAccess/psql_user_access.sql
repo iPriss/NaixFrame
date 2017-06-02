@@ -12,15 +12,15 @@ ALTER TABLE naixframe.users_account_id_seq
 CREATE TABLE naixframe.users_account
 (
   id integer NOT NULL DEFAULT nextval('naixframe.users_account_id_seq'::regclass),
-  "FirstName" character varying(100),
-  "LastName" character varying(100),
-  "UserName" character varying(100) NOT NULL,
-  "UserEmail" character varying(254) NOT NULL,
-  "UserStatus" character varying(50) NOT NULL,
-  "RegistrationTime" timestamp with time zone,
-  "EmailConfirmationToken" character varying(100),
-  "PasswordReminderToken" character varying(100),
-  "PasswordReminderExpire" timestamp with time zone,
+  "first_name" character varying(100),
+  "last_name" character varying(100),
+  "user_name" character varying(100) NOT NULL,
+  "user_email" character varying(254) NOT NULL,
+  "user_status" character varying(50) NOT NULL,
+  "registration_time" timestamp with time zone,
+  "email_confirmation_token" character varying(100),
+  "password_reminder_token" character varying(100),
+  "password_reminder_expire" timestamp with time zone,
   CONSTRAINT "users-id" PRIMARY KEY (id)
 )
 WITH ( OIDS=FALSE );
@@ -40,13 +40,13 @@ ALTER TABLE naixframe.logins_id_seq
 CREATE TABLE naixframe.logins
 (
   id integer NOT NULL DEFAULT nextval('naixframe.logins_id_seq'::regclass),
-  "UserName" character varying(100),
-  "UserEmail" character varying(254),
-  "PasswordSalt" character varying(50),
-  "PasswordHash" character varying(200),
-  "RelatedUserID" integer NOT NULL,
+  "user_name" character varying(100),
+  "user_email" character varying(254),
+  "password_salt" character varying(50),
+  "password_hash" character varying(200),
+  "related_user_id" integer NOT NULL,
   CONSTRAINT "logins-id" PRIMARY KEY (id),
-  CONSTRAINT "logins-user-id" FOREIGN KEY ("RelatedUserID")
+  CONSTRAINT "logins-user-id" FOREIGN KEY ("related_user_id")
       REFERENCES naixframe.users_account (id) MATCH FULL
       ON UPDATE NO ACTION ON DELETE CASCADE
 )

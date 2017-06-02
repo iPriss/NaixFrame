@@ -41,6 +41,17 @@ class DBAccess {
         }
     }
 
+    private function db_close () {
+        switch ($this -> dbEngine) {
+            case 'psql':
+                pg_close( $this -> dbConn );
+                break;
+            case 'mysql':
+                mysqli_close( $this -> dbConn );
+                break;
+        }
+    }
+
     private function db_begin () {
         switch ($this -> dbEngine) {
             case 'psql':
@@ -110,7 +121,7 @@ class DBAccess {
         }
     }
 
-    private function add_quotes( $string ) {
+    private function add_quotes($string ) {
         if ( !is_numeric($string) ) {
             return '\'' . $string . '\'';
         }else{
@@ -147,7 +158,7 @@ class DBAccess {
         return True;
     }
 
-    private function add_key_to_rows ($return_key, $rows) {
+    private function add_key_to_rows ( $return_key, $rows ) {
         $rrows = array();
         foreach ( $rows as $key => $val ) {
             $rrows[ $val[ $return_key ] ] = $val;
@@ -291,6 +302,10 @@ class DBAccess {
         if ( !$this -> dbResult ) { return False; }
         return $this -> db_affected_rows();
     } // END db_delete
+
+    function __destruct() {
+        $this -> db_close();
+    }
 
 }
 
