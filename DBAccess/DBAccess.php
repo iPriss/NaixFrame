@@ -20,32 +20,41 @@ class DBAccess {
 
     private function db_connect ($database) {
         switch ($this -> dbEngine) {
+        	// Working with PSQL
             case 'psql':
-                set_error_handler("exception_error_handler");
                 $conn = False;
+
+                // Setting error handler to alow catch error
+                set_error_handler("exception_error_handler");
+
                 try { $conn = @pg_connect($database); }
                 Catch (Exception $e) { $this -> dbError = $e->getMessage(); }
+
+                // Reseting error handler behave
                 restore_error_handler();
-                return $conn;
+
+            // Working with MYSQL
             case 'mysql':
-                $conn = False;
                 list($server, $username, $password, $db) = $database;
                 $conn = @mysqli_connect( $server, $username, $password, $db );
 
                 if ( mysqli_connect_errno() ) {
                     $this -> dbError = "MySQL Error: " . mysqli_connect_errno();
-                    return False;
-                }else{
-                    return $conn;
+                	$conn = False;
                 }
         }
+
+        return $conn;
     }
 
     private function db_close () {
         switch ($this -> dbEngine) {
+        	// Working with PSQL
             case 'psql':
                 pg_close( $this -> dbConn );
                 break;
+
+			// Working with MYSQL
             case 'mysql':
                 mysqli_close( $this -> dbConn );
                 break;
@@ -54,8 +63,11 @@ class DBAccess {
 
     private function db_begin () {
         switch ($this -> dbEngine) {
+        	// Working with PSQL
             case 'psql':
                 return pg_query( $this->dbConn, 'BEGIN' );
+
+			// Working with MYSQL
             case 'mysql':
                 return mysqli_query( $this->dbConn, 'BEGIN' );
         }
@@ -63,8 +75,11 @@ class DBAccess {
 
     private function db_commit () {
         switch ($this -> dbEngine) {
+        	// Working with PSQL
             case 'psql':
                 return pg_query( $this->dbConn, 'COMMIT' );
+
+            // Working with PSQL
             case 'mysql':
                 return mysqli_query( $this->dbConn, 'COMMIT' );
         }
@@ -72,8 +87,11 @@ class DBAccess {
 
     private function db_rollback () {
         switch ($this -> dbEngine) {
+        	// Working with PSQL
             case 'psql':
                 return pg_query( $this->dbConn, 'ROLLBACK' );
+
+			// Working with PSQL
             case 'mysql':
                 return mysqli_query( $this->dbConn, 'ROLLBACK' );
         }
@@ -81,22 +99,27 @@ class DBAccess {
 
     private function db_execute () {
         switch ($this -> dbEngine) {
+        	// Working with PSQL
             case 'psql':
                 $result = @pg_query( $this->dbConn, $this->dbQuery );
                 $this -> dbError = pg_last_error( $this->dbConn );
-                return $result;
+
+			// Working with PSQL
             case 'mysql':
                 $result = @mysqli_query( $this->dbConn, $this->dbQuery );
                 $this -> dbError = mysqli_error( $this->dbConn );
-                return $result;
         }
+		return $result;
     }
 
     private function db_affected_rows () {
         switch ($this -> dbEngine) {
+			// Working with PSQL
             case 'psql':
                 if ( $this -> dbResult ) { return pg_affected_rows( $this -> dbResult ); }
                 else { return 0; }
+
+			// Working with MYSQL
             case 'mysql':
                 if ( $this -> dbConn ) { return mysqli_affected_rows( $this -> dbConn ); }
                 else { return 0; }
@@ -105,8 +128,11 @@ class DBAccess {
 
     private function db_fetch_all () {
         switch ($this -> dbEngine) {
+			// Working with PSQL
             case 'psql':
                 return pg_fetch_all( $this -> dbResult );
+
+			// Working with MYSQL
             case 'mysql':
                 return mysqli_fetch_all( $this -> dbResult, MYSQLI_ASSOC );
         }
@@ -114,8 +140,11 @@ class DBAccess {
 
     private function db_escape_string ($string) {
         switch ($this -> dbEngine) {
+			// Working with PSQL
             case 'psql':
                 return pg_escape_string($string);
+
+			// Working with MYSQL
             case 'mysql':
                 return mysqli_real_escape_string($this -> dbConn, $string);
         }
@@ -168,8 +197,8 @@ class DBAccess {
 
     /**
      * [db_select description]
-     * @param  string $table         [table in wich params going to be insert]
-     * @param  array  $keys          [array with columns used in were clause, key is the column name, and had an array inside with a value]
+     * @param  string $table         [table in wich select will be perform]
+     * @param  array  $keys          [array with columns used in were clause, key is the column name, having a nested array with a value]
      * @param  array  $return_params [array with each column returned]
      * @param  array  $opts          [array with QUERY options as group_by, order_by, limit, offset]
      * @param  string $return_key    [name of the column witch is gonna be used as return array key]
